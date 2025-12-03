@@ -1,66 +1,74 @@
-import Link from "next/link";
+"use client";
 
-import { auth } from "@/server/auth";
-import { api, HydrateClient } from "@/trpc/server";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
-export default async function Home() {
-  const hello = await api.post.hello({ text: "from tRPC" });
-  const session = await auth();
+function HomeInner() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const tableParam = params.get("table") ?? "";
+  const [tableNumber, setTableNumber] = useState<string>("");
+  const [name, setName] = useState<string>("");
+  const [error, setError] = useState<string>("");
 
-  // Removed post prefetch; schema no longer includes Post
+  useEffect(() => {
+    const savedTable = localStorage.getItem("tableNumber") ?? "";
+    const savedName = localStorage.getItem("customerName") ?? "";
+    setTableNumber(tableParam || savedTable || "1");
+    setName(savedName);
+  }, [tableParam]);
+
+  const canSubmit = useMemo(() => name.trim().length > 0, [name]);
 
   return (
-    <HydrateClient>
-      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
-        <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
-          </h1>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/usage/first-steps"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">First Steps →</h3>
-              <div className="text-lg">
-                Just the basics - Everything you need to know to set up your
-                database and authentication.
-              </div>
-            </Link>
-            <Link
-              className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 hover:bg-white/20"
-              href="https://create.t3.gg/en/introduction"
-              target="_blank"
-            >
-              <h3 className="text-2xl font-bold">Documentation →</h3>
-              <div className="text-lg">
-                Learn more about Create T3 App, the libraries it uses, and how
-                to deploy it.
-              </div>
-            </Link>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-2xl text-white">
-              {hello ? hello.greeting : "Loading tRPC query..."}
-            </p>
-
-            <div className="flex flex-col items-center justify-center gap-4">
-              <p className="text-center text-2xl text-white">
-                {session && <span>Logged in as {session.user?.name}</span>}
-              </p>
-              <Link
-                href={session ? "/api/auth/signout" : "/api/auth/signin"}
-                className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
-              >
-                {session ? "Sign out" : "Sign in"}
-              </Link>
-            </div>
-          </div>
-
-          {/* Removed LatestPost component; not applicable to new schema */}
+    <main className="min-h-screen bg-neutral-100 text-neutral-900">
+      <div className="mx-auto max-w-sm p-6">
+        <div className="mb-6 flex justify-center">
+          <div className="h-16 w-16 rounded bg-neutral-300" />
         </div>
-      </main>
-    </HydrateClient>
+        <div className="mb-4 text-center text-[16px]">Selamat Datang di Mie I&apos;am</div>
+
+        <div className="rounded-xl bg-white p-5 shadow">
+          <div className="mb-2 text-center text-[14px]">Nomor meja kamu :</div>
+          <div className="mb-4 text-center text-[40px] font-bold">{tableNumber}</div>
+
+          <div className="mb-2 text-[14px]">Input nama kamu!</div>
+          <input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError("");
+            }}
+            placeholder="Nama kamu"
+            className="w-full rounded border border-neutral-300 bg-white p-2 text-sm"
+          />
+          {error && <div className="mt-1 text-xs text-red-600">{error}</div>}
+
+          <button
+            onClick={() => {
+              if (!canSubmit) {
+                setError("Tolong input nama kamu!");
+                return;
+              }
+              localStorage.setItem("customerName", name.trim());
+              localStorage.setItem("tableNumber", tableNumber);
+              router.push(`/menu?table=${tableNumber}`);
+            }}
+            disabled={!canSubmit}
+            className="mt-4 w-full rounded-full bg-gradient-to-r from-[#FFBC50] to-[#FF8400] p-3 text-center font-semibold text-white disabled:opacity-60"
+          >
+            Order now
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
   );
 }
