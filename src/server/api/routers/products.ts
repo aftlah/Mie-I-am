@@ -1,4 +1,5 @@
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { z } from "zod";
 
 export const productsRouter = createTRPCRouter({
   quickJobs: publicProcedure.query(async ({ ctx }) => {
@@ -8,5 +9,11 @@ export const productsRouter = createTRPCRouter({
       take: 10,
     });
   }),
-});
 
+  byIds: publicProcedure
+    .input(z.array(z.number()))
+    .query(async ({ ctx, input }) => {
+      if (input.length === 0) return [];
+      return ctx.db.product.findMany({ where: { id: { in: input } } });
+    }),
+});
