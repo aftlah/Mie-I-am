@@ -80,23 +80,26 @@ export const ordersRouter = createTRPCRouter({
       });
       if (!order) return null;
       const now = Date.now();
-      const estMs = order.estimated_completion_time
+      const estMsRaw = order.estimated_completion_time
         ? order.estimated_completion_time.getTime() - now
         : 0;
+      const estMs = estMsRaw;
+      const etaMs = Math.max(estMs, 0);
+      const lateMs = estMs < 0 ? Math.abs(estMs) : 0;
+      const allDone = order.items.every((it) => it.item_status === "done");
       let status = order.status;
       if (status === "paid") {
         if (now - order.order_time.getTime() > 60_000) {
           status = "processing";
         }
       }
-      if (order.estimated_completion_time && now > order.estimated_completion_time.getTime()) {
+      if (allDone) {
         status = "completed";
       }
       if (status !== order.status) {
         await ctx.db.order.update({ where: { id: order.id }, data: { status } });
         order.status = status;
       }
-      return { order, etaMs: Math.max(estMs, 0) };
+      return { order, etaMs, lateMs };
     }),
 });
-

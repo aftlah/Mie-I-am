@@ -24,6 +24,7 @@ function PaymentInner() {
     { orderId },
     { enabled: paid && !!orderId, refetchInterval: paid ? 5000 : false }
   );
+  const [lateDismissed, setLateDismissed] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
@@ -135,10 +136,15 @@ function PaymentInner() {
           <h1 className="text-lg font-bold">PEMBAYARAN</h1>
           <div className="rounded-full bg-green-100 px-3 py-2 text-center text-green-700">Pembayaran Selesai!</div>
           <div className="flex items-center justify-between rounded-xl bg-white p-3 text-sm shadow">
-            <div className="text-green-700">Bayar</div>
-            <div className="font-semibold">Antri</div>
-            <div>Dimasak</div>
-            <div>Selesai</div>
+            <div className={order.data?.order.status === "paid" ? "text-green-700 font-semibold" : "text-green-700"}>Bayar</div>
+            <div className={order.data?.order.status === "paid" ? "font-semibold" : order.data?.order.status === "processing" ? "font-semibold" : ""}>Antri</div>
+            <div className={order.data?.order.status === "processing" ? "font-semibold" : ""}>Dimasak</div>
+            <div className={order.data?.order.status === "completed" ? "font-semibold" : ""}>Selesai</div>
+          </div>
+          <div className="text-center text-sm">
+            {order.data?.order.status === "paid" && <div>Silahkan Menunggu, Pesanan Anda akan Segera Dibuat</div>}
+            {order.data?.order.status === "processing" && <div>Pesanan Sedang Dimasak</div>}
+            {order.data?.order.status === "completed" && <div>Pesanan Sudah Selesai! Silahkan Ambil Pesananmu</div>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-white p-3 text-center shadow">
@@ -147,15 +153,42 @@ function PaymentInner() {
             </div>
             <div className="rounded-xl bg-white p-3 text-center shadow">
               <div className="text-xs">Sedang Dilayani</div>
-              <div className="text-2xl font-bold">{Math.max(0, Number(order.data?.order.queue_number ?? 0) - 2)}</div>
+              <div className="text-2xl font-bold">{
+                (() => {
+                  const qn = Number(order.data?.order.queue_number ?? 0);
+                  const st = order.data?.order.status;
+                  return st === "processing" || st === "completed" ? qn : Math.max(0, qn - 2);
+                })()
+              }</div>
             </div>
           </div>
+          {order.data?.lateMs && order.data.lateMs > 0 && order.data.order.status === "processing" && !lateDismissed && (
+            <div className="rounded-xl bg-white p-3 shadow border border-red-300">
+              <div className="mb-2 flex items-center gap-2 text-red-700">
+                <span>⚠️</span>
+                <span className="font-semibold">Maaf, Menu Anda terlambat {Math.ceil((order.data.lateMs ?? 0) / 60000)} menit karena pesanan padat</span>
+              </div>
+              <button
+                onClick={() => setLateDismissed(true)}
+                className="mt-2 w-full rounded-full bg-gradient-to-r from-[#FFBC50] to-[#FF8400] px-6 py-2 text-white"
+              >
+                OK
+              </button>
+            </div>
+          )}
           <div className="rounded-xl bg-white p-3 shadow">
             <div className="text-sm">Estimasi Selesai</div>
-            <div className="font-mono text-green-700">
-              {String(Math.floor((order.data?.etaMs ?? 0) / 60000)).padStart(2, "0")}:
-              {String(Math.floor(((order.data?.etaMs ?? 0) % 60000) / 1000)).padStart(2, "0")}
-            </div>
+            {order.data?.lateMs && order.data.lateMs > 0 ? (
+              <div className="font-mono text-red-600">
+                {String(Math.floor((order.data.lateMs ?? 0) / 60000)).padStart(2, "0")}:
+                {String(Math.floor(((order.data.lateMs ?? 0) % 60000) / 1000)).padStart(2, "0")}
+              </div>
+            ) : (
+              <div className="font-mono text-green-700">
+                {String(Math.floor((order.data?.etaMs ?? 0) / 60000)).padStart(2, "0")}:
+                {String(Math.floor(((order.data?.etaMs ?? 0) % 60000) / 1000)).padStart(2, "0")}
+              </div>
+            )}
           </div>
           <div className="rounded-xl bg-white p-3 shadow">
             <div className="mb-2 text-sm">Status Makanan Anda</div>
@@ -165,7 +198,14 @@ function PaymentInner() {
                   <div>
                     {it.quantity} {it.product.name}
                   </div>
-                  <div className="text-gray-600">{it.item_status === "queued" ? "Belum Dimasak" : it.item_status === "cooking" ? "Dimasak" : "Selesai"}</div>
+                  <div className="text-gray-600">{
+                    (() => {
+                      const st = order.data?.order.status;
+                      const base = it.item_status;
+                      const derived = st === "completed" ? "done" : st === "processing" && base !== "done" ? "cooking" : base;
+                      return derived === "queued" ? "Belum Dimasak" : derived === "cooking" ? "Dimasak" : "Selesai";
+                    })()
+                  }</div>
                 </div>
               ))}
             </div>
