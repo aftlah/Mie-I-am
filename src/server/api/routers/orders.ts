@@ -102,4 +102,51 @@ export const ordersRouter = createTRPCRouter({
       }
       return { order, etaMs, lateMs };
     }),
+
+  kitchenActive: publicProcedure
+    .query(async ({ ctx }) => {
+      const orders = await ctx.db.order.findMany({
+        where: { status: { in: ["paid", "processing"] } },
+        orderBy: { order_time: "asc" },
+        include: { items: { include: { product: true } }, table: true },
+      });
+      const now = Date.now();
+      const enriched = orders.map((order) => {
+        const estMsRaw = order.estimated_completion_time
+          ? order.estimated_completion_time.getTime() - now
+          : 0;
+        const lateMs = estMsRaw < 0 ? Math.abs(estMsRaw) : 0;
+        const waitMs = now - order.order_time.getTime();
+        return { order, lateMs, waitMs };
+      });
+      const delayCount = enriched.filter((e) => e.lateMs > 0).length;
+      return { orders: enriched, totalActive: enriched.length, totalDelay: delayCount };
+    }),
+
+  startCooking: publicProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      await ctx.db.order.update({ where: { id: input.orderId }, data: { status: "processing" } });
+      await ctx.db.orderItem.updateMany({
+        where: { orderId: input.orderId, item_status: "queued" },
+        data: { item_status: "cooking", started_cooking_at: now },
+      });
+      return { ok: true };
+    }),
+
+  finishOrder: publicProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      await ctx.db.orderItem.updateMany({
+        where: { orderId: input.orderId, item_status: "cooking" },
+        data: { item_status: "done", finished_cooking_at: now },
+      });
+      const remaining = await ctx.db.orderItem.count({ where: { orderId: input.orderId, item_status: { in: ["queued", "cooking"] } } });
+      if (remaining === 0) {
+        await ctx.db.order.update({ where: { id: input.orderId }, data: { status: "completed" } });
+      }
+      return { ok: true };
+    }),
 });
