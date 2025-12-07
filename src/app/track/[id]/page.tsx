@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { api } from "@/trpc/react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function TrackPage() {
   const params = useParams();
@@ -16,8 +16,25 @@ export default function TrackPage() {
     return () => clearInterval(id);
   }, [refetch]);
 
-  const mm = useMemo(() => String(Math.floor(((data?.lateMs ?? 0) > 0 ? (data?.lateMs ?? 0) : (data?.etaMs ?? 0)) / 60000)).padStart(2, "0"), [data?.etaMs, data?.lateMs]);
-  const ss = useMemo(() => String(Math.floor((((data?.lateMs ?? 0) > 0 ? (data?.lateMs ?? 0) : (data?.etaMs ?? 0)) % 60000) / 1000)).padStart(2, "0"), [data?.etaMs, data?.lateMs]);
+  const [displayMs, setDisplayMs] = useState(0);
+  const [isLate, setIsLate] = useState(false);
+
+  useEffect(() => {
+    const eta = data?.etaMs ?? 0;
+    const late = data?.lateMs ?? 0;
+    const start = Date.now();
+    setIsLate(late > 0);
+    setDisplayMs(eta);
+    if (data?.order.status === "completed") return;
+    const id = setInterval(() => {
+      const delta = Date.now() - start;
+      setDisplayMs(Math.max(0, eta - delta));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [data?.etaMs, data?.lateMs, data?.order.status]);
+
+  const mm = useMemo(() => String(Math.floor(displayMs / 60000)).padStart(2, "0"), [displayMs]);
+  const ss = useMemo(() => String(Math.floor((displayMs % 60000) / 1000)).padStart(2, "0"), [displayMs]);
 
   return (
     <div className="min-h-screen bg-neutral-100 p-4 text-neutral-900">
@@ -53,11 +70,7 @@ export default function TrackPage() {
 
         <div className="rounded-xl bg-white p-3 shadow">
           <div className="text-sm">Estimasi Selesai</div>
-          {(data?.lateMs ?? 0) > 0 ? (
-            <div className="font-mono text-red-600">{mm}:{ss}</div>
-          ) : (
-            <div className="font-mono text-green-700">{mm}:{ss}</div>
-          )}
+          <div className={`font-mono ${isLate ? "text-red-600" : "text-green-700"}`}>{mm}:{ss}</div>
           <div className="text-xs text-gray-500">Menghitung mundur estimasi.</div>
         </div>
 
